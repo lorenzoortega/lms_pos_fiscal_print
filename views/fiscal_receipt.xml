@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ========================================================= -->
+    <!--  RECIBO FISCAL TÉRMICO POS (80mm) – DGII RD               -->
+    <!-- ========================================================= -->
+    <template
+        id="lms_fiscal_receipt_80mm"
+        t-name="lms_pos_fiscal_print.lms_fiscal_receipt_80mm"
+    >
+
+        <div style="width:80mm; font-size:12px; font-family:monospace;">
+
+            <!-- ================= EMPRESA ================= -->
+            <div style="text-align:center;">
+                <strong>
+                    <t t-esc="doc.company_id.name"/>
+                </strong><br/>
+                RNC: <t t-esc="doc.company_id.vat or ''"/>
+            </div>
+
+            <hr/>
+
+            <!-- ================= NCF ================= -->
+            <t t-if="doc.ncf_number">
+
+                <!-- TIPO DE COMPROBANTE -->
+                <t t-if="doc.ncf_type">
+                    <div style="font-weight:bold; margin-bottom:2px;">
+                        <t t-esc="dict(doc._fields['ncf_type'].selection).get(doc.ncf_type, '')"/>
+                    </div>
+                </t>
+
+                <!-- NÚMERO NCF -->
+                <div>
+                    <strong>NCF:</strong>
+                    <t t-esc="doc.ncf_number"/>
+                </div>
+
+                <!-- VÁLIDO HASTA -->
+                <t t-if="doc.ncf_range_id">
+                    <t t-if="'valid_until' in doc.ncf_range_id._fields and doc.ncf_range_id.valid_until">
+                        <div>
+                            <strong>Válido hasta:</strong>
+                            <t t-esc="doc.ncf_range_id.valid_until"/>
+                        </div>
+                    </t>
+                    <t t-elif="'date_end' in doc.ncf_range_id._fields and doc.ncf_range_id.date_end">
+                        <div>
+                            <strong>Válido hasta:</strong>
+                            <t t-esc="doc.ncf_range_id.date_end"/>
+                        </div>
+                    </t>
+                </t>
+
+                <hr/>
+            </t>
+
+            <!-- ================= CLIENTE ================= -->
+            <t t-if="doc.partner_id and not doc.partner_id.is_public">
+                <div>
+                    <strong>Cliente:</strong>
+                    <t t-esc="doc.partner_id.name"/>
+                </div>
+                <t t-if="doc.partner_id.vat">
+                    <div>
+                        <strong>RNC:</strong>
+                        <t t-esc="doc.partner_id.vat"/>
+                    </div>
+                </t>
+                <hr/>
+            </t>
+
+            <!-- ================= DETALLE ================= -->
+            <table style="width:100%; border-collapse:collapse;">
+                <t t-foreach="doc.invoice_line_ids" t-as="line">
+                    <tr>
+                        <td style="width:70%; vertical-align:top;">
+                            <t t-esc="line.name"/>
+                        </td>
+                        <td style="width:30%; text-align:right; vertical-align:top;">
+                            <t t-esc="line.price_subtotal"/>
+                        </td>
+                    </tr>
+                </t>
+            </table>
+
+            <hr/>
+
+            <!-- ================= TOTALES ================= -->
+            <div>
+                Subtotal:
+                <span style="float:right;">
+                    <t t-esc="doc.amount_untaxed"/>
+                </span>
+            </div>
+
+            <div>
+                ITBIS:
+                <span style="float:right;">
+                    <t t-esc="doc.amount_tax"/>
+                </span>
+            </div>
+
+            <div>
+                <strong>Total:</strong>
+                <strong style="float:right;">
+                    <t t-esc="doc.amount_total"/>
+                </strong>
+            </div>
+
+            <hr/>
+
+            <!-- ================= QR FISCAL ================= -->
+            <t t-if="doc.ncf_qr_payload">
+                <div style="text-align:center;">
+                    <img
+                        t-att-src="'/report/barcode/QR/' + doc.ncf_qr_payload + '/120x120'"
+                        width="120"
+                        height="120"
+                        alt="QR Fiscal"
+                    />
+                </div>
+                <hr/>
+            </t>
+
+            <div style="text-align:center;">
+                Gracias por su compra
+            </div>
+
+        </div>
+
+    </template>
+
+</odoo>

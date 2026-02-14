@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================= -->
+    <!-- BLOQUEO FISCAL - UI (ODOO 18) -->
+    <!-- ============================= -->
+
+    <record id="view_move_form_fiscal_lock" model="ir.ui.view">
+        <field name="name">account.move.form.fiscal.lock</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Mensaje visual (sin attrs, sin alert) -->
+            <xpath expr="//sheet" position="inside">
+                <div invisible="not fiscal_printed"
+                     class="oe_edit_only"
+                     style="color: #b94a48; font-weight: bold; margin-bottom: 8px;">
+                   ⚠️ Factura fiscal impresa – Solo lectura
+                </div>
+            </xpath>
+
+            <!-- Cliente -->
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="readonly">fiscal_printed</attribute>
+            </xpath>
+
+            <!-- Fecha factura -->
+            <xpath expr="//field[@name='invoice_date']" position="attributes">
+                <attribute name="readonly">fiscal_printed</attribute>
+            </xpath>
+
+            <!-- Líneas de factura -->
+            <xpath expr="//field[@name='invoice_line_ids']" position="attributes">
+                <attribute name="readonly">fiscal_printed</attribute>
+            </xpath>
+
+            <!-- Botón volver a borrador -->
+            <xpath expr="//button[@name='button_draft']" position="attributes">
+                <attribute name="invisible">fiscal_printed</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ===================================================== -->
+    <!-- CRON #1: Generar factura fiscal automática desde POS -->
+    <!-- ===================================================== -->
+    <record id="ir_cron_lms_pos_fiscal_invoice" model="ir.cron">
+        <field name="name">POS – Generar factura fiscal automática</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order"/>
+        <field name="state">code</field>
+        <field name="code">model._lms_create_fiscal_invoice_from_pos()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
+    <!-- ===================================================== -->
+    <!-- CRON #2: Conciliación automática pagos POS ↔ Facturas -->
+    <!-- ===================================================== -->
+    <record id="ir_cron_lms_pos_ncf_reconcile" model="ir.cron">
+        <field name="name">POS – Conciliación automática facturas con NCF</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_reconcile_pos_ncf_invoices()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
+</odoo>

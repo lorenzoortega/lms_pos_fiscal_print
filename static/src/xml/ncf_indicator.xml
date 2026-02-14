@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-inherit="point_of_sale.PaymentScreen" t-inherit-mode="extension">
+
+        <xpath expr="//div[contains(@class,'payment-summary')]" position="before">
+
+            <!-- 🟦 NCF sugerido (NO SE TOCA) -->
+            <t t-if="ncfSuggestion">
+                <div style="
+                    margin: 6px 0;
+                    padding: 6px;
+                    font-weight: bold;
+                    text-align: center;
+                    border: 1px dashed #875A7B;
+                    border-radius: 6px;
+                    background: #faf7fb;
+                ">
+                    <t t-esc="ncfSuggestion"/>
+                </div>
+            </t>
+
+            <!-- ⚠️ ADVERTENCIA NCF (UMBRAL BAJO – NO BLOQUEA) -->
+            <t t-if="ncfWarningMessage">
+                <div style="
+                    margin: 6px 0;
+                    padding: 6px;
+                    font-weight: bold;
+                    text-align: center;
+                    border: 1px solid #f0ad4e;
+                    border-radius: 6px;
+                    background: #fff8e5;
+                    color: #8a6d3b;
+                ">
+                    <t t-esc="ncfWarningMessage"/>
+                </div>
+            </t>
+
+            <!-- 🔴 ERROR FISCAL (NCF AGOTADO – BLOQUEO TOTAL) -->
+            <t t-if="_ncfStatus == 'no_available' and _ncfWarningCache">
+                <div style="
+                    margin: 6px 0;
+                    padding: 6px;
+                    font-weight: bold;
+                    text-align: center;
+                    border: 1px solid #d9534f;
+                    border-radius: 6px;
+                    background: #fdecea;
+                    color: #a94442;
+                ">
+                    <t t-esc="_ncfWarningCache"/>
+                </div>
+            </t>
+
+        </xpath>
+
+    </t>
+
+</templates>
