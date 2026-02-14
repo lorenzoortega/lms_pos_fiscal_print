@@ -6,38 +6,12 @@ class PosOrder(models.Model):
     _inherit = "pos.order"
 
     # =========================================================
-    # 🔒 FORZAR CLIENTE EN ÓRDENES POS
-    # =========================================================
-    @api.model
-    def create(self, vals):
-        """
-        Garantiza que toda orden POS tenga partner.
-        Si viene vacío, asigna Cliente Consumidor Final.
-        """
-
-        if not vals.get("partner_id"):
-
-            partner = self.env["res.partner"].search(
-                [
-                    ("name", "=", "Cliente Consumidor Final"),
-                    ("company_id", "in", [False, self.env.company.id]),
-                ],
-                order="company_id desc",
-                limit=1,
-            )
-
-            if partner:
-                vals["partner_id"] = partner.id
-
-        return super().create(vals)
-
-    # =========================================================
     # 🔹 LEGACY / FALLBACK
-    # (Se mantiene por compatibilidad)
     # =========================================================
     def _create_invoice(self, move_vals):
         """
         Crear factura desde POS (LEGACY).
+        Se conserva por compatibilidad futura.
         """
 
         if not move_vals.get("partner_id"):
@@ -65,7 +39,7 @@ class PosOrder(models.Model):
         return move
 
     # =========================================================
-    # 🔒 VALIDACIÓN FISCAL: NCF DISPONIBLE
+    # 🔒 VALIDACIÓN FISCAL
     # =========================================================
     def _lms_check_ncf_available(self, partner):
 
@@ -92,26 +66,48 @@ class PosOrder(models.Model):
         return True
 
     # =========================================================
-    # ✅ FACTURACIÓN FISCAL DESDE POS (CORREGIDO)
+    # ✅ FACTURACIÓN FISCAL
+    # Compatible con CRON y Controller
     # =========================================================
     def _lms_create_fiscal_invoice_from_pos(self):
-        """
-        Este método ahora trabaja sobre la orden específica
-        que llama el controller.
-        """
 
-        for order in self:
+        company = self.env.company
 
-            if order.account_move or order.state != "paid":
+        # 🔹 Si se llama desde controller → usar self
+        if self:
+            orders = self.filtered(
+                lambda o: o.state == "paid"
+                and not o.account_move
+                and o.amount_total > 0
+                and o.company_id.id == company.id
+            )
+        else:
+            # 🔹 Si lo llama CRON (model-level)
+            orders = self.search(
+                [
+                    ("state", "=", "paid"),
+                    ("account_move", "=", False),
+                    ("company_id", "=", company.id),
+                    ("amount_total", ">", 0),
+                ],
+                order="date_order asc",
+                limit=10,
+            )
+
+        if not orders:
+            return True
+
+        for order in orders:
+
+            if order.account_move:
                 continue
 
             partner = order.partner_id
-
             if not partner:
                 partner = self.env["res.partner"].search(
                     [
                         ("name", "=", "Cliente Consumidor Final"),
-                        ("company_id", "in", [False, order.company_id.id]),
+                        ("company_id", "in", [False, company.id]),
                     ],
                     order="company_id desc",
                     limit=1,
@@ -121,21 +117,36 @@ class PosOrder(models.Model):
                         _("No existe el cliente 'Cliente Consumidor Final'.")
                     )
 
-            # Validar disponibilidad NCF
             order._lms_check_ncf_available(partner)
 
-            # 🔑 USAR FLUJO OFICIAL POS
-            order._create_invoice()
+            invoice_lines = []
+            for line in order.lines:
+                invoice_lines.append(
+                    (0, 0, {
+                        "product_id": line.product_id.id,
+                        "name": line.product_id.display_name,
+                        "quantity": line.qty,
+                        "price_unit": line.price_unit,
+                        "tax_ids": [(6, 0, line.tax_ids.ids)],
+                    })
+                )
 
-            invoice = order.account_move
-            if not invoice:
-                continue
+            move_vals = {
+                "move_type": "out_invoice",
+                "partner_id": partner.id,
+                "invoice_date": fields.Date.context_today(order),
+                "invoice_origin": order.name,
+                "company_id": order.company_id.id,
+                "invoice_line_ids": invoice_lines,
+            }
 
-            # Asignar NCF si existe el método
+            invoice = self.env["account.move"].create(move_vals)
+
+            order.write({"account_move": invoice.id})
+
             if hasattr(invoice, "lms_assign_ncf"):
                 invoice.lms_assign_ncf()
 
-            # Marcar pendiente impresión fiscal
             vals = {}
             if "lms_fiscal_pending_print" in invoice._fields:
                 vals["lms_fiscal_pending_print"] = True
@@ -144,8 +155,6 @@ class PosOrder(models.Model):
             if vals:
                 invoice.write(vals)
 
-            # Postear factura
-            if invoice.state == "draft":
-                invoice.action_post()
+            invoice.action_post()
 
         return True
