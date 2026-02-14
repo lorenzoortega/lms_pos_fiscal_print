@@ -50,7 +50,6 @@ window.lmsFiscalQZ = {
         return `Comprobante ${tipo}`;
     },
 
-    // Para SUBTOTAL / ITBIS / Pagos
     formatLine(label, amount, currency, width = 44) {
         const symbol = currency?.symbol || "";
         const left = `${label} ${symbol}`.padEnd(width - 12);
@@ -81,11 +80,11 @@ window.lmsFiscalQZ = {
             const PAD = "  ";
             const LINE = PAD + "-".repeat(44) + "\n";
 
-            // ================= RESET + MARGEN SUPERIOR =================
+            // RESET
             cmds.push('\x1B\x40');
             cmds.push('\n\n');
 
-            // ================= EMPRESA =================
+            // EMPRESA
             cmds.push('\x1B\x61\x01');
             cmds.push('\x1D\x21\x11');
             cmds.push(PAD + this.normalize(data.company.name) + '\n');
@@ -103,7 +102,7 @@ window.lmsFiscalQZ = {
             cmds.push('\n');
             cmds.push('\x1B\x61\x00');
 
-            // ================= NCF =================
+            // NCF
             cmds.push(LINE);
             cmds.push(PAD + this.normalize(this.getComprobanteLabel(data.ncf)) + '\n');
             cmds.push(PAD + `NCF: ${data.ncf}\n`);
@@ -117,12 +116,12 @@ window.lmsFiscalQZ = {
             if (data.cashier) cmds.push(PAD + this.normalize(`CAJERO: ${data.cashier}`) + '\n');
             cmds.push(LINE);
 
-            // ================= CLIENTE =================
+            // CLIENTE
             cmds.push(PAD + this.normalize(data.partner.name) + '\n');
             if (data.partner.rnc) cmds.push(PAD + `RNC: ${data.partner.rnc}\n`);
             cmds.push(LINE);
 
-            // ================= DETALLE =================
+            // DETALLE
             cmds.push(
                 PAD +
                 `Cant     Descripcion             Importe ${data.currency?.symbol || ""}\n`
@@ -132,31 +131,28 @@ window.lmsFiscalQZ = {
             data.lines.forEach(l => {
                 const qty = l.qty.toFixed(2).padStart(7);
                 const name = this.cleanProductName(l.name)
-                    .substring(0, 28)
-                    .padEnd(25);
-                const total = this.formatMoney(l.qty * l.price).padStart(10);
+                    .substring(0, 23)
+                    .padEnd(23);
+                const total = this.formatMoney(l.qty * l.price).padStart(9);
 
                 cmds.push(PAD + `${qty}  ${name}${total}\n`);
             });
 
-            // ================= TOTALES =================
+            // TOTALES
             cmds.push(LINE);
             cmds.push(PAD + this.formatLine("SUBTOTAL", data.subtotal, data.currency));
             cmds.push(PAD + this.formatLine("ITBIS", data.tax, data.currency));
 
-            // ===== TOTAL (alineado exactamente con SUBTOTAL / ITBIS) =====
-            cmds.push('\n');
-            cmds.push('\x1B\x61\x00');   // izquierda
-            cmds.push('\x1D\x21\x10');   // 1.5x aprox
-
+            // ===== TOTAL CORREGIDO =====
+            cmds.push(LINE);
             cmds.push(
                 PAD +
-                `TOTAL ${data.currency?.symbol || ""} ${this.formatMoney(data.total)}\n`
+                `TOTAL ${data.currency?.symbol || ""}`.padEnd(44 - 12) +
+                this.formatMoney(data.total).padStart(12) +
+                "\n"
             );
 
-            cmds.push('\x1D\x21\x00');
-
-            // ================= COBRO =================
+            // COBRO
             if (data.payments && data.payments.length) {
                 cmds.push(LINE);
                 cmds.push(PAD + `Pagos ${data.currency?.symbol || ""}\n`);
@@ -185,13 +181,12 @@ window.lmsFiscalQZ = {
                 cmds.push(PAD + this.formatLine("Devuelta", change, data.currency));
             }
 
-            // ================= CIERRE =================
+            // CIERRE
             cmds.push('\n');
             cmds.push('\x1B\x61\x01');
             cmds.push(PAD + this.normalize('DOCUMENTO VALIDO PARA FINES FISCALES') + '\n');
             cmds.push(PAD + this.normalize('GRACIAS POR SU COMPRA') + '\n');
 
-            // ================= QR =================
             const qrData =
                 `RNC=${data.company.rnc}|NCF=${data.ncf}|TOTAL=${data.total}|FECHA=${data.date}`;
 
@@ -201,7 +196,6 @@ window.lmsFiscalQZ = {
             cmds.push('\n');
             cmds.push(PAD + this.normalize('CONSERVE ESTE COMPROBANTE') + '\n');
 
-            // ================= MARGEN INFERIOR + CORTE =================
             cmds.push('\n\n');
             cmds.push('\x1D\x56\x00');
 
