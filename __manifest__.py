@@ -8,6 +8,7 @@
     ],
     "data": [
         "data/ir_cron.xml",
+	"data/partner_data.xml",
     ],
     "assets": {
         "point_of_sale._assets_pos": [        

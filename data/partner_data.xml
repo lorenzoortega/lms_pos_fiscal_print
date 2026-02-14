@@ -1,0 +1,9 @@
+<odoo>
+    <record id="partner_consumidor_final" model="res.partner">
+        <field name="name">Cliente Consumidor Final</field>
+        <field name="company_type">person</field>
+        <field name="customer_rank">1</field>
+        <field name="vat"></field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>
