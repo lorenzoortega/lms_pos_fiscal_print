@@ -1,12 +1,6 @@
-console.log("🟢 fiscal_print_qz.js CARGADO (QZ REAL)");
+console.log("🟢 fiscal_print_qz.js CARGADO (LOCAL SERVICE MODE)");
 
 window.lmsFiscalQZ = {
-
-    async ensureConnection() {
-        if (!qz.websocket.isActive()) {
-            await qz.websocket.connect();
-        }
-    },
 
     // ================= HELPERS =================
     formatMoney(value) {
@@ -69,16 +63,14 @@ window.lmsFiscalQZ = {
         );
     },
 
+    // ================= IMPRESIÓN =================
     async printTicket(data) {
         try {
-            await this.ensureConnection();
 
-            const printer = await qz.printers.getDefault();
-            const cfg = qz.configs.create(printer);
             const cmds = [];
-
             const PAD = "  ";
-            const LINE = PAD + "-".repeat(44) + "\n";
+            const WIDTH = 44;
+            const LINE = PAD + "-".repeat(WIDTH) + "\n";
 
             // RESET
             cmds.push('\x1B\x40');
@@ -89,7 +81,7 @@ window.lmsFiscalQZ = {
             cmds.push('\x1D\x21\x11');
             cmds.push(PAD + this.normalize(data.company.name) + '\n');
             cmds.push('\x1D\x21\x00');
-
+            cmds.push('\n');
             cmds.push(PAD + this.normalize(`RNC: ${data.company.rnc}`) + '\n');
 
             if (data.company.phone) {
@@ -99,7 +91,6 @@ window.lmsFiscalQZ = {
                 cmds.push(PAD + this.normalize(`Email: ${data.company.email}`) + '\n');
             }
 
-            cmds.push('\n');
             cmds.push('\x1B\x61\x00');
 
             // NCF
@@ -113,12 +104,16 @@ window.lmsFiscalQZ = {
 
             cmds.push(PAD + `FECHA: ${this.formatDateTime(data.date)}\n`);
             cmds.push(PAD + `FACTURA: ${data.invoice_number}\n`);
-            if (data.cashier) cmds.push(PAD + this.normalize(`CAJERO: ${data.cashier}`) + '\n');
+            if (data.cashier)
+                cmds.push(PAD + this.normalize(`CAJERO: ${data.cashier}`) + '\n');
+
             cmds.push(LINE);
 
             // CLIENTE
             cmds.push(PAD + this.normalize(data.partner.name) + '\n');
-            if (data.partner.rnc) cmds.push(PAD + `RNC: ${data.partner.rnc}\n`);
+            if (data.partner.rnc)
+                cmds.push(PAD + `RNC: ${data.partner.rnc}\n`);
+
             cmds.push(LINE);
 
             // DETALLE
@@ -129,31 +124,47 @@ window.lmsFiscalQZ = {
             cmds.push(LINE);
 
             data.lines.forEach(l => {
-                const qty = l.qty.toFixed(2).padStart(7);
-                const name = this.cleanProductName(l.name)
-                    .substring(0, 23)
-                    .padEnd(23);
-                const total = this.formatMoney(l.qty * l.price).padStart(9);
 
-                cmds.push(PAD + `${qty}  ${name}${total}\n`);
+                const qty = l.qty.toFixed(2).padStart(7);
+                const name = this.cleanProductName(l.name);
+                const amount = this.formatMoney(l.qty * l.price);
+
+                const leftText = qty + "  " + name;
+                const spaces = WIDTH - leftText.length - amount.length;
+
+                cmds.push(
+                    PAD +
+                    leftText +
+                    " ".repeat(Math.max(spaces, 1)) +
+                    amount +
+                    "\n"
+                );
             });
 
             // TOTALES
             cmds.push(LINE);
             cmds.push(PAD + this.formatLine("SUBTOTAL", data.subtotal, data.currency));
             cmds.push(PAD + this.formatLine("ITBIS", data.tax, data.currency));
-
-            // ===== TOTAL CORREGIDO =====
             cmds.push(LINE);
+
+            // ===== TOTAL GRANDE CENTRADO =====
+            cmds.push('\x1B\x45\x01');  // Bold ON
+            cmds.push('\x1D\x21\x11');  // Doble tamaño
+            cmds.push('\x1B\x61\x01');  // Centrar
+
             cmds.push(
-                PAD +
-                `TOTAL ${data.currency?.symbol || ""}`.padEnd(44 - 12) +
-                this.formatMoney(data.total).padStart(12) +
-                "\n"
+                `TOTAL ${data.currency?.symbol || ""} ${this.formatMoney(data.total)}\n`
             );
 
-            // COBRO
+            cmds.push('\x1D\x21\x00');  // Reset tamaño
+            cmds.push('\x1B\x45\x00');  // Bold OFF
+            cmds.push('\x1B\x61\x00');  // Izquierda
+
+            cmds.push('\n'); // Espacio seguridad
+
+            // ================= PAGOS =================
             if (data.payments && data.payments.length) {
+
                 cmds.push(LINE);
                 cmds.push(PAD + `Pagos ${data.currency?.symbol || ""}\n`);
 
@@ -161,14 +172,23 @@ window.lmsFiscalQZ = {
                 let negative = 0;
 
                 data.payments.forEach(p => {
+
                     if (p.amount > 0) {
+
                         totalPaid += p.amount;
+
+                        const method = this.normalize(p.method);
+                        const amount = this.formatMoney(p.amount);
+                        const spaces = WIDTH - method.length - amount.length;
+
                         cmds.push(
                             PAD +
-                            this.normalize(p.method).padEnd(20) +
-                            this.formatMoney(p.amount).padStart(20) +
-                            '\n'
+                            method +
+                            " ".repeat(Math.max(spaces, 1)) +
+                            amount +
+                            "\n"
                         );
+
                     } else {
                         negative += Math.abs(p.amount);
                     }
@@ -181,9 +201,10 @@ window.lmsFiscalQZ = {
                 cmds.push(PAD + this.formatLine("Devuelta", change, data.currency));
             }
 
-            // CIERRE
+            // ================= CIERRE =================
             cmds.push('\n');
             cmds.push('\x1B\x61\x01');
+
             cmds.push(PAD + this.normalize('DOCUMENTO VALIDO PARA FINES FISCALES') + '\n');
             cmds.push(PAD + this.normalize('GRACIAS POR SU COMPRA') + '\n');
 
@@ -196,15 +217,27 @@ window.lmsFiscalQZ = {
             cmds.push('\n');
             cmds.push(PAD + this.normalize('CONSERVE ESTE COMPROBANTE') + '\n');
 
-            cmds.push('\n\n');
-            cmds.push('\x1D\x56\x00');
+            // Espacio antes del corte
+            cmds.push('\n\n\n');
+            cmds.push('\x1D\x56\x00');  // Corte
 
-            await qz.print(cfg, cmds);
-            console.log("🟢 Ticket fiscal profesional impreso");
+            const fullCommand = cmds.join("");
+            const base64Data = btoa(unescape(encodeURIComponent(fullCommand)));
+
+            const response = await fetch("http://127.0.0.1:5001/print", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ data: base64Data }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Error en servicio de impresión local");
+            }
+
+            console.log("🟢 Ticket fiscal enviado al servicio local");
 
         } catch (err) {
-            console.error("❌ Error QZ Tray:", err);
-            throw err;
+            console.error("❌ Error impresión local:", err);
         }
     }
 };
